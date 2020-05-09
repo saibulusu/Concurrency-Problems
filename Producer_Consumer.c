@@ -2,80 +2,72 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <semaphore.h>
-#include "LinkedList.c"
+#include <stdbool.h>
+#define SIZE 20
+#define MAX 10
 
-struct ListNode* list;
-pthread_mutex_t* lock;
+int buffer[SIZE];
+int fill = 0;
+int use = 0;
 
-sem_t* mutex;
-sem_t* empty;
-sem_t* full;
+sem_t empty, full;
+pthread_mutex_t mutex;
 
-int cur = 0;
-int limit = 100;
-
-void put() {
-    pthread_mutex_lock(lock);
-    insert(list, cur);
-    ++cur;
-    pthread_mutex_unlock(lock);
+// Put a value into the end of the buffer
+void put(int value) {
+    buffer[fill % SIZE] = value;
+    ++fill;
 }
 
-void get() {
-    printf("calling get\n");
-    fflush(stdout);
-    pthread_mutex_lock(lock);
-    delete(list);
-    pthread_mutex_unlock(lock);
-	printf("ending get\n");
-	fflush(stdout);
+// Get the first available value from the buffer
+int get() {
+    int tmp = buffer[use % SIZE];
+    ++use;
+    return tmp;
 }
 
-void* producer() {
-	printf("staring producer\n");
-	fflush(stdout);
-    while (cur < limit) {
-        sem_wait(empty);
-		sem_wait(mutex);
-		put();
-    	sem_post(mutex);
-		sem_post(full);
-	}
-    printf("cur reached limit");
-    fflush(stdout);
+// Consumer thread operation
+void *consumer(void *arg) {
+    for (int i = 0; i < MAX; ++i) {
+        sem_wait(&full);
+        pthread_mutex_lock(&mutex);
+        get();
+        printf("use = %d\n", use);
+        fflush(stdout);
+        pthread_mutex_unlock(&mutex);
+        sem_post(&empty);
+    }
     return NULL;
 }
 
-void* consumer() {
-    while (cur < limit) {
-        sem_wait(full);
-        sem_wait(mutex);
-		get();
-    	sem_post(mutex);
-		sem_post(empty);
-	}
+// Producer thread operation
+void *producer(void *arg) {
+    for (int i = 0; i < MAX; ++i) {
+        sem_wait(&empty);
+        pthread_mutex_lock(&mutex);
+        put(i);
+        printf("fill = %d\n", fill);
+        fflush(stdout);
+        pthread_mutex_unlock(&mutex);
+        sem_post(&full);
+    }
     return NULL;
 }
 
+// Run the program, indicate the number of producers and consumers
 int main(int argc, char* argv[]) {
-	insert(list, 0);
-	printf("%d\n", list->value);
-}
+    if (argc != 3) {
+        printf("Incorrect number of arguments. Terminating...\n");
+        fflush(stdout);
+        exit(1);
+    }
 
-int main2(int argc, char* argv[]) {
-    int num_producers = 1;
-    int num_consumers = 1;
-    int MAX = 10;
+    sem_init(&empty, 0, SIZE);
+    sem_init(&full, 0, 0);
+    pthread_mutex_init(&mutex, NULL);
 
-	lock = malloc(sizeof(pthread_mutex_t));
-
-    mutex = malloc(sizeof(sem_t));
-    empty = malloc(sizeof(sem_t));
-    full = malloc(sizeof(sem_t));
-
-    sem_init(mutex, 0, 1);
-   	sem_init(empty, 0, MAX);
-    sem_init(full, 0, 0);
+    int num_producers = atoi(argv[1]);
+    int num_consumers = atoi(argv[2]);
 
     pthread_t producers[num_producers];
     for (int i = 0; i < num_producers; ++i) {
@@ -87,19 +79,16 @@ int main2(int argc, char* argv[]) {
         pthread_create(&consumers[i], NULL, consumer, NULL);
     }
 
-	printf("created all threads\n");
-	fflush(stdout);
-
     for (int i = 0; i < num_producers; ++i) {
-         pthread_join(producers[i], NULL);
+        pthread_join(producers[i], NULL);
     }
 
     for (int i = 0; i < num_consumers; ++i) {
         pthread_join(consumers[i], NULL);
     }
 
-	printf("execution done\n");
-	fflush(stdout);
+    printf("completed execution\n");
+    fflush(stdout);
 
     return 0;
 }
