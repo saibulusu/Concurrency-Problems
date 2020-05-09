@@ -7,8 +7,7 @@
 #define MAX 10
 
 int buffer[SIZE];
-int fill = 0;
-int use = 0;
+int fill = 0, use = 0;
 
 sem_t empty, full;
 pthread_mutex_t mutex;
