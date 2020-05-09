@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <stdbool.h>
+#include <signal.h>
 #define SIZE 10
 #define MAX 5
 
@@ -55,15 +57,16 @@ void *read() {
 
 // Write a value into the buffer
 void *write() {
-    acquire_writelock();
-    buffer[fill] = cur;
-    printf("writing %d: %d\n", fill, cur);
-    fflush(stdout);
-    ++fill;
-    fill %= SIZE;
-    ++cur;
-    release_writelock();
-
+    while (true) {
+        acquire_writelock();
+        buffer[fill] = cur;
+        printf("writing %d: %d\n", fill, cur);
+        fflush(stdout);
+        ++fill;
+        fill %= SIZE;
+        ++cur;
+        release_writelock();
+    }
     return NULL;
 }
 
@@ -91,12 +94,23 @@ int main(int argc, char* argv[]) {
         pthread_create(&readers[i], NULL, read, NULL);
     }
 
-    for (int i = 0; i < num_writers; ++i) {
-        pthread_join(writers[i], NULL);
+    // for (int i = 0; i < num_writers; ++i) {
+    //     pthread_join(writers[i], NULL);
+    // }
+
+    // for (int i = 0; i < num_readers; ++i) {
+    //     pthread_join(readers[i], NULL);
+    // }
+
+    while (cur < 200) {
+
+    }
+    for (int i = 0; i < num_readers; ++i) {
+        pthread_kill(readers[i], 0);
     }
 
-    for (int i = 0; i < num_readers; ++i) {
-        pthread_join(readers[i], NULL);
+    for (int i = 0; i < num_writers; ++i) {
+        pthread_kill(writers[i], 0);
     }
 
     printf("completed execution\n");
